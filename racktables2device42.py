@@ -633,7 +633,7 @@ class DB:
         for rec in raw:
             host_id = int(rec[0])
             try:
-                name = rec[1].strip()
+                name = self.format_device_name(rec[1].strip())
             except AttributeError:
                 continue
             self.vm_hosts.update({host_id: name})
@@ -654,7 +654,7 @@ class DB:
         for rec in raw:
             host_id = int(rec[0])
             try:
-                name = rec[1].strip()
+                name = self.format_device_name(rec[1].strip())
             except AttributeError:
                 continue
             self.chassis.update({host_id: name})
@@ -723,6 +723,25 @@ class DB:
                 if data:  # RT objects that do not have data are locations, racks, rows etc...
                     self.process_data(data, dev_id)
 
+    def format_device_name(self, device_name):
+        if device_name:
+            suffix_found = False
+
+            for suffix_config in conf.DEVICE_NAME_CONFIG['suffix_configs']:
+                if device_name.lower() in suffix_config['device_names']:
+                    suffix = suffix_config['suffix']
+                    suffix_found = True
+                    break
+
+            if not suffix_found:
+                suffix = conf.DEVICE_NAME_CONFIG['default_suffix']
+
+            # Add the suffix if not already there.
+            if not device_name.lower().endswith(suffix.lower()):
+                device_name = '%s%s' % (device_name, suffix)
+
+        return device_name
+
     def process_data(self, data, dev_id):
         devicedata = {}
         device2rack = {}
@@ -739,7 +758,7 @@ class DB:
             rcomment, rrack_id, rrack_name, rrow_name, \
             rlocation_id, rlocation_name, rparent_name = x
 
-            name = x[1]
+            name = self.format_device_name(x[1])
             note = x[-7]
 
             if 'Operating System' in x:
@@ -852,7 +871,7 @@ class DB:
 
                             get_links = self.get_links(item[3])
                             if get_links:
-                                device_name = self.get_device_by_port(get_links[0])
+                                device_name = self.format_device_name(self.get_device_by_port(get_links[0]))
                                 switchport_data.update({'device': device_name})
                                 switchport_data.update({'remote_device': device_name})
                                 switchport_data.update({'remote_port': self.get_port_by_id(self.all_ports, get_links[0])})
@@ -868,7 +887,7 @@ class DB:
                                     })
 
                                 # reverse connection
-                                device_name = self.get_device_by_port(get_links[0])
+                                device_name = self.format_device_name(self.get_device_by_port(get_links[0]))
                                 switchport_data = {
                                     'port': self.get_port_by_id(self.all_ports, get_links[0]),
                                     'switch': device_name
@@ -950,7 +969,7 @@ class DB:
             rawip, nic_name, hostname = line
             ip = self.convert_ip(rawip)
             devmap.update({'ipaddress': ip})
-            devmap.update({'device': hostname})
+            devmap.update({'device': self.format_device_name(hostname)})
             if nic_name:
                 devmap.update({'tag': nic_name})
             rest.post_ip(devmap)
